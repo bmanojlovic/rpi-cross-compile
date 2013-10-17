@@ -21,17 +21,22 @@ function ch_exec () {
 	chroot ${CHROOT} bash -c "$1"
 }
 
+# let's make sure chroot dir is there
+if [ ! -d "${CHROOT}" ]; then
+  mkdir -p $CHROOT
+fi
+
 # don't run if basic arm runtime system is not possible
 NOBINFMT=0
-for fmt in  qemu-arm arm ;do 
+for fmt in  qemu-arm arm ;do
 	if [ ! -f /proc/sys/fs/binfmt_misc/${fmt} ];then
 		echo "binfmt is not set please run your distribution setup procedure"
 		NOBINFMT=$(($NOBINFMT + 1))
 	fi
 done
-if [ $NOBINFMT -ne 1 ] ; then 
+if [ $NOBINFMT -ne 1 ] ; then
 	echo "binfmt support must be running for this to work...."
-	exit -1 
+	exit -1
 fi
 
 # initial preparation so arm binaries work without any issue
@@ -42,10 +47,10 @@ for qemu_bin in ${QEMU_BINARIES}; do
                 cp -a $(which ${qemu_bin}) ${CHROOT}/usr/bin/
                 NOQEMU=$(($NOQEMU + 1))
         fi
-done    
-if [ $NOQEMU -eq 0 ] ; then 
+done
+if [ $NOQEMU -eq 0 ] ; then
 	echo "You must have some of above mentioned binaries for this to work..."
-	exit -1 
+	exit -1
 fi
 
 # mount proc as it is required by this process
@@ -62,7 +67,7 @@ ch_exec "apt-get -y --force-yes install m4 make wget ${ADDITIONAL_PACKAGES}"
 xarch=$(uname -m)
 carch=$(ch_exec 'uname -m')
 
-# add ld-linux loader to all libs first 
+# add ld-linux loader to all libs first
 ALL_LIBS=$(ldconfig -p|egrep '(libnss_|ld-|libnsl|libz)'|cut -d '>' -f 2)
 
 # Prepare cross compiler to be able to run it from chroot in "real" arm env
@@ -86,7 +91,7 @@ if [ $? -ne 0 ]; then
         echo "chroot not set correctly please check output of command from above"
         exit -1
 fi
-for executable in $XBINS ; do 
+for executable in $XBINS ; do
 	CBIN=$(ch_exec "which ${executable}")
 	XBIN=$(which ${executable})
 	export executable CBIN XBIN
@@ -98,14 +103,14 @@ done
 # replace sh -> dash link with link to bash
 (cd  ${CHROOT}/bin; ln -sf bash sh)
 
-for libname in $(echo $ALL_LIBS|sort|uniq) ; do 
+for libname in $(echo $ALL_LIBS|sort|uniq) ; do
 	DNAME=${CHROOT}/$(dirname $libname|sed -e 's,lib,lab,')
 	mkdir -p ${DNAME}
 	cp  ${libname}* $DNAME
 done
 # now fix ld-linux to search into /lab /lab64 and other "labs" err libs hehe
-mkdir -p ${CHROOT}/lib64 
-for libname in $(ldconfig -p|grep /ld-|cut -d '>' -f 2|sort|uniq) ; do 
+mkdir -p ${CHROOT}/lib64
+for libname in $(ldconfig -p|grep /ld-|cut -d '>' -f 2|sort|uniq) ; do
 	DNAME=${CHROOT}/$(dirname $libname)
 	mkdir -p ${DNAME}
 	cp  ${libname}* $DNAME
