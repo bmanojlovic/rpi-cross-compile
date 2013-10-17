@@ -1,0 +1,35 @@
+#!/bin/sh
+function usage {
+		echo $0 "{start|stop}"
+		exit -1
+}
+mkdir -p /opt/db_raspbian/proc /opt/db_raspbian/dev /opt/db_raspbian/dev/pts /opt/db_raspbian/sys
+if [ $# -eq 2 ]; then
+	usage
+fi
+
+case "$1" in
+	start)
+		set -x
+		qemu-binfmt-conf.sh 
+		mount --bind /proc /opt/db_raspbian/proc
+		mount --bind /dev/ /opt/db_raspbian/dev
+		mount --bind /dev/pts /opt/db_raspbian/dev/pts
+		mount --bind /sys/ /opt/db_raspbian/sys
+		;;
+	stop)
+		set -x
+		ARCHS=$(cd /proc/sys/fs/binfmt_misc/; ls|sed -e '/status/d;/register/d')
+		for i_arch in $ARCHS
+		do
+			echo '-1' > /proc/sys/fs/binfmt_misc/${i_arch}
+		done
+		umount /opt/db_raspbian/sys
+		umount /opt/db_raspbian/dev/pts
+		umount /opt/db_raspbian/dev
+		umount /opt/db_raspbian/proc
+		;;
+	*)
+		usage
+		;;
+esac

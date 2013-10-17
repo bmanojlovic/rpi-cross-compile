@@ -1,0 +1,127 @@
+#!/bin/bash -x
+# (c) boris@steki.net (GPL-3.0+)
+# Basic config...
+################ WARNING ############################
+# THIS CHROOT VAR MUST BE SET !!!!!!!! be warned or it WILL break your system :)
+CHROOT="/opt/db_raspbian"
+XBINS="true false ls sort cp make chmod chown grep gunzip gzip mkdir mktemp rm sed tar m4 test uniq xargs xz fold bash"
+# binaries which arm binaries in chrooted environment
+QEMU_BINARIES="qemu-arm qemu-arm-binfmt qemu-arm-static"
+# which packages you would like to have in chroot environment by default
+ADDITIONAL_PACKAGES="coreutils joe less openssh-client openssh-server gcc libc6-dev git"
+# Emulate correct arm CPU
+QEMU_CPU=arm1176
+LC_ALL=C
+# use mirrorbrain be nice to raspbian project...
+MIRROR=http://mirrordirector.raspbian.org/raspbian
+#MIRROR=http://archive.raspbian.org/raspbian
+export CHROOT XBINS QEMU_CPU LC_ALL ADDITIONAL_PACKAGES
+
+function ch_exec () {
+	chroot ${CHROOT} bash -c "$1"
+}
+
+# don't run if basic arm runtime system is not possible
+NOBINFMT=0
+for fmt in  qemu-arm arm ;do 
+	if [ ! -f /proc/sys/fs/binfmt_misc/${fmt} ];then
+		echo "binfmt is not set please run your distribution setup procedure"
+		NOBINFMT=$(($NOBINFMT + 1))
+	fi
+done
+if [ $NOBINFMT -ne 1 ] ; then 
+	echo "binfmt support must be running for this to work...."
+	exit -1 
+fi
+
+# initial preparation so arm binaries work without any issue
+mkdir -p ${CHROOT}/proc ${CHROOT}/usr/bin
+NOQEMU=0
+for qemu_bin in ${QEMU_BINARIES}; do
+        if [ -x "$(which ${qemu_bin})" ]; then
+                cp -a $(which ${qemu_bin}) ${CHROOT}/usr/bin/
+                NOQEMU=$(($NOQEMU + 1))
+        fi
+done    
+if [ $NOQEMU -eq 0 ] ; then 
+	echo "You must have some of above mentioned binaries for this to work..."
+	exit -1 
+fi
+
+# mount proc as it is required by this process
+mount proc -t proc ${CHROOT}/proc
+debootstrap --no-check-gpg --arch=armhf --verbose wheezy ${CHROOT} ${MIRROR}
+
+# Get public key...
+wget http://archive.raspbian.org/raspbian.public.key -O ${CHROOT}/tmp/raspbian.public.key
+
+ch_exec 'apt-key add /tmp/raspbian.public.key'
+ch_exec 'apt-get update'
+ch_exec "apt-get -y --force-yes install m4 make wget ${ADDITIONAL_PACKAGES}"
+
+xarch=$(uname -m)
+carch=$(ch_exec 'uname -m')
+
+# add ld-linux loader to all libs first 
+ALL_LIBS=$(ldconfig -p|egrep '(libnss_|ld-|libnsl|libz)'|cut -d '>' -f 2)
+
+# Prepare cross compiler to be able to run it from chroot in "real" arm env
+###########(cd ${CHROOT} ; git clone https://github.com/raspberrypi/tools.git) ### way to slow....
+if [ -f /opt/master.zip ]; then
+	cp /opt/master.zip ${CHROOT}
+else
+	(cd ${CHROOT} ; wget https://github.com/raspberrypi/tools/archive/master.zip)
+fi
+#### security precaution for case that master.zip failed for some reason to be downloaded all destructive operations are done in correct place
+(mkdir -p ${CHROOT}/usr ${CHROOT}/tools-master/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian/arm-linux-gnueabihf/libc/usr )
+(cd ${CHROOT}; unzip master.zip)
+(cd ${CHROOT}/usr; ln -s ../tools-master/arm-bcm2708 cross)
+(cd ${CHROOT}/tools-master/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian/arm-linux-gnueabihf/libc/usr ; mv lib lib-orig; ln -s /usr/lib lib; mv include include-orig ; ln -s /usr/include include)
+(cd ${CHROOT}/tools-master/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian/arm-linux-gnueabihf/libc ; mv lib lib-orig; ln -s /lib lib)
+
+ALL_LIBS=" ${ALL_LIBS} /lib/ld-linux.so.2 /usr/lib/libstdc++.so.6 /lib/libz.so.1 /lib/libgcc_s.so.1"
+ALL_LIBS=" ${ALL_LIBS} $(ldd ${CHROOT}/tools-master/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian/bin/arm-linux-gnueabihf-gcc|awk -F " " '{ print $3}') "
+ch_exec 'uname -a'
+if [ $? -ne 0 ]; then
+        echo "chroot not set correctly please check output of command from above"
+        exit -1
+fi
+for executable in $XBINS ; do 
+	CBIN=$(ch_exec "which ${executable}")
+	XBIN=$(which ${executable})
+	export executable CBIN XBIN
+	cp $XBIN ${CHROOT}/${CBIN}-${xarch}
+	mv ${CHROOT}/${CBIN} ${CHROOT}/${CBIN}-${carch}
+	( cd $(dirname ${CHROOT}/${CBIN}); ln -sf ${executable}-${xarch} ${executable} )
+	ALL_LIBS="$ALL_LIBS $(ldd $XBIN|awk -F " " '{ print $3}')"
+done
+# replace sh -> dash link with link to bash
+(cd  ${CHROOT}/bin; ln -sf bash sh)
+
+for libname in $(echo $ALL_LIBS|sort|uniq) ; do 
+	DNAME=${CHROOT}/$(dirname $libname|sed -e 's,lib,lab,')
+	mkdir -p ${DNAME}
+	cp  ${libname}* $DNAME
+done
+# now fix ld-linux to search into /lab /lab64 and other "labs" err libs hehe
+mkdir -p ${CHROOT}/lib64 
+for libname in $(ldconfig -p|grep /ld-|cut -d '>' -f 2|sort|uniq) ; do 
+	DNAME=${CHROOT}/$(dirname $libname)
+	mkdir -p ${DNAME}
+	cp  ${libname}* $DNAME
+	sed -i 's,/lib,/lab,g' ${CHROOT}${libname}*
+done
+cat << EOF >> ${CHROOT}/etc/bash.bashrc
+QEMU_CPU=arm1176
+LC_ALL=C
+CC=arm-linux-gnueabihf-gcc
+CXX=arm-linux-gnueabihf-g++
+PATH=/usr/cross/gcc-linaro-arm-linux-gnueabihf-raspbian/bin:$PATH
+export PATH CC CXX QEMU_CPU LC_ALL
+alias ls="ls --color=auto"
+alias l="ls -la"
+alias ll="ls -la"
+alias cd..="cd .."
+alias ..="cd .."
+alias ...="cd ../.."
+EOF
