@@ -83,7 +83,7 @@ fi
 (cd ${CHROOT}/usr; ln -s ../tools-master/arm-bcm2708 cross)
 (cd ${CHROOT}/tools-master/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian/arm-linux-gnueabihf/libc/usr ; mv lib lib-orig; ln -s /usr/lib lib; mv include include-orig ; ln -s /usr/include include)
 (cd ${CHROOT}/tools-master/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian/arm-linux-gnueabihf/libc ; mv lib lib-orig; ln -s /lib lib)
-
+(cd ${CHROOT}/tools-master/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian/bin; for i in * ; do ln -s $i $(echo $i|sed -e 's/arm-linux-gnueabihf-//g') ;done )
 ALL_LIBS=" ${ALL_LIBS} /lib/ld-linux.so.2 /usr/lib/libstdc++.so.6 /lib/libz.so.1 /lib/libgcc_s.so.1"
 ALL_LIBS=" ${ALL_LIBS} $(ldd ${CHROOT}/tools-master/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian/bin/arm-linux-gnueabihf-gcc|awk -F " " '{ print $3}') "
 ch_exec 'uname -a'
