@@ -4,7 +4,7 @@
 ################ WARNING ############################
 # THIS CHROOT VAR MUST BE SET !!!!!!!! be warned or it WILL break your system :)
 CHROOT="/opt/db_raspbian"
-XBINS="true false ls sort cp make chmod chown grep gunzip gzip mkdir mktemp rm sed tar m4 test uniq xargs xz fold bash"
+XBINS="true false ls sort cp make chmod chown grep gunzip gzip mkdir mktemp rm sed tar m4 test uniq xargs xz fold bash md5sum"
 # binaries which arm binaries in chrooted environment
 QEMU_BINARIES="qemu-arm qemu-arm-binfmt qemu-arm-static"
 # which packages you would like to have in chroot environment by default
