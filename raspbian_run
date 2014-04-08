@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 function usage {
 		echo $0 "{start|stop}"
 		exit -1
@@ -11,7 +11,15 @@ fi
 case "$1" in
 	start)
 		set -x
-		qemu-binfmt-conf.sh 
+		if [ -x $(which qemu-binfmt-conf.sh) ] ; then
+			qemu-binfmt-conf.sh
+		fi
+		if [ -x /etc/init.d/binfmt-support ]; then
+			service binfmt-support start 2>/dev/null
+		fi
+		if [ ! -f /proc/sys/fs/binfmt_misc/arm ]; then
+			echo "binfmt probably not set correctly..."
+		fi
 		mount --bind /proc /opt/db_raspbian/proc
 		mount --bind /dev/ /opt/db_raspbian/dev
 		mount --bind /dev/pts /opt/db_raspbian/dev/pts

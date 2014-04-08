@@ -4,7 +4,7 @@
 ################ WARNING ############################
 # THIS CHROOT VAR MUST BE SET !!!!!!!! be warned or it WILL break your system :)
 CHROOT="/opt/db_raspbian"
-XBINS="true false ls sort cp make chmod chown grep gunzip gzip mkdir mktemp rm sed tar m4 test uniq xargs xz fold bash md5sum"
+XBINS="true false ls sort cp make chmod chown grep gunzip gzip mkdir mktemp rm sed tar m4 test uniq xargs xz fold md5sum bash"
 # binaries which arm binaries in chrooted environment
 QEMU_BINARIES="qemu-arm qemu-arm-binfmt qemu-arm-static"
 # which packages you would like to have in chroot environment by default
@@ -21,6 +21,13 @@ function ch_exec () {
 	chroot ${CHROOT} bash -c "$1"
 }
 
+function get_lib () {
+	echo $(ldconfig -p|grep $1|grep '>'|cut -d '>' -f 2)
+}
+
+function get_ldd_lib () {
+	echo $(ldd $1 |grep '> /'|cut -d ' ' -f 3)
+}
 # let's make sure chroot dir is there
 if [ ! -d "${CHROOT}" ]; then
   mkdir -p $CHROOT
@@ -84,8 +91,8 @@ fi
 (cd ${CHROOT}/tools-master/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian/arm-linux-gnueabihf/libc/usr ; mv lib lib-orig; ln -s /usr/lib lib; mv include include-orig ; ln -s /usr/include include)
 (cd ${CHROOT}/tools-master/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian/arm-linux-gnueabihf/libc ; mv lib lib-orig; ln -s /lib lib)
 (cd ${CHROOT}/tools-master/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian/bin; for i in * ; do ln -s $i $(echo $i|sed -e 's/arm-linux-gnueabihf-//g') ;done )
-ALL_LIBS=" ${ALL_LIBS} /lib/ld-linux.so.2 /usr/lib/libstdc++.so.6 /lib/libz.so.1 /lib/libgcc_s.so.1"
-ALL_LIBS=" ${ALL_LIBS} $(ldd ${CHROOT}/tools-master/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian/bin/arm-linux-gnueabihf-gcc|awk -F " " '{ print $3}') "
+ALL_LIBS=" ${ALL_LIBS} $(get_lib ld-linux.so.[2-3]) $(get_lib libstdc++.so.6) $(get_lib libz.so.1) $(get_lib libgcc_s.so.1)"
+ALL_LIBS=" ${ALL_LIBS} $(get_ldd_lib ${CHROOT}/tools-master/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian/bin/arm-linux-gnueabihf-gcc) "
 ch_exec 'uname -a'
 if [ $? -ne 0 ]; then
         echo "chroot not set correctly please check output of command from above"
@@ -98,7 +105,7 @@ for executable in $XBINS ; do
 	cp $XBIN ${CHROOT}/${CBIN}-${xarch}
 	mv ${CHROOT}/${CBIN} ${CHROOT}/${CBIN}-${carch}
 	( cd $(dirname ${CHROOT}/${CBIN}); ln -sf ${executable}-${xarch} ${executable} )
-	ALL_LIBS="$ALL_LIBS $(ldd $XBIN|awk -F " " '{ print $3}')"
+	ALL_LIBS="$ALL_LIBS $(get_ldd_lib $XBIN) "
 done
 # replace sh -> dash link with link to bash
 (cd  ${CHROOT}/bin; ln -sf bash sh)
@@ -116,6 +123,9 @@ for libname in $(ldconfig -p|grep /ld-|cut -d '>' -f 2|sort|uniq) ; do
 	cp  ${libname}* $DNAME
 	sed -i 's,/lib,/lab,g' ${CHROOT}${libname}*
 done
+# debian has ld-linux-x86-64.so.2 as link only in /lib64 so re-create it
+# for opensuse it will just fail with no issues
+(cd ${CHROOT}/lib64 ; ln -s /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 ld-linux-x86-64.so.2 )
 cat << EOF >> ${CHROOT}/etc/bash.bashrc
 QEMU_CPU=arm1176
 LC_ALL=C
