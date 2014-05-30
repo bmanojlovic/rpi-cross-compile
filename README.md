@@ -13,3 +13,10 @@ In case you are using 64bit environment (prefered) you must install next package
 
     sudo apt-get install libc6-i386 lib32stdc++6
 
+
+HOWTO:
+
+As root or running with sudo run `./debootstrap_raspbian_chroot`
+
+   sudo ./debootstrap_raspbian_chroot
+
