@@ -144,6 +144,7 @@ do_log '"Fixing" library locations s,lib,lab,'
 for libname in $(echo $ALL_LIBS|sort|uniq) ; do
 	DNAME=${CHROOT}/$(dirname $libname|sed -e 's,lib,lab,')
 	mkdir -p ${DNAME}
+	do_log "copy host to chroot: $libname -> ${DNAME}"
 	cp  ${libname}* $DNAME
 done
 # now fix ld-linux to search into /lab /lab64 and other "labs" err libs hehe
