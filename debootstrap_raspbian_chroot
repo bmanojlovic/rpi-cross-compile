@@ -4,8 +4,11 @@
 ################ WARNING ############################
 # THIS CHROOT VAR MUST BE SET !!!!!!!! be warned or it WILL break your system :)
 CHROOT="/opt/db_raspbian"
+# use mirrorbrain be nice to raspbian project...
+MIRROR=http://mirrordirector.raspbian.org/raspbian
+#MIRROR=http://archive.raspbian.org/raspbian
 XBINS="true false ls sort cp make chmod chown grep gunzip gzip mkdir mktemp rm sed seq"
-XBINS+=" tar m4 test uniq xargs xz fold md5sum bash"
+XBINS+=" debootstrap tar m4 test uniq xargs xz fold md5sum bash"
 # binaries which arm binaries in chrooted environment
 QEMU_BINARIES="qemu-arm qemu-arm-binfmt qemu-arm-static"
 # which packages you would like to have in chroot environment by default
@@ -51,10 +54,7 @@ fi
 # Emulate correct arm CPU
 QEMU_CPU=arm1176
 LC_ALL=C
-# use mirrorbrain be nice to raspbian project...
-MIRROR=http://mirrordirector.raspbian.org/raspbian
-#MIRROR=http://archive.raspbian.org/raspbian
-export CHROOT XBINS QEMU_CPU LC_ALL ADDITIONAL_PACKAGES
+export CHROOT XBINS QEMU_CPU LC_ALL ADDITIONAL_PACKAGES MIRROR
 
 # don't run if basic arm runtime system is not possible
 NOBINFMT=0
@@ -109,6 +109,7 @@ else
 fi
 #### security precaution for case that master.zip failed for some reason to be downloaded all destructive operations are done in correct place
 set -e
+(mkdir -p ${CHROOT}/etc/dpkg/dpkg.cfg.d/; echo "force-unsafe-io" > ${CHROOT}/etc/dpkg/dpkg.cfg.d/02apt-speedup)
 (mkdir -p ${CHROOT}/usr ${CHROOT}/tools-master/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian/arm-linux-gnueabihf/libc/usr )
 do_log "Unpacking compiler"
 (cd ${CHROOT}; unzip master.zip)
