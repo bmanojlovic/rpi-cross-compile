@@ -85,7 +85,7 @@ fi
 mount proc -t proc ${CHROOT}/proc && do_log "Mounting proc on ${CHROOT}/proc"
 
 # don't run service on install
-cat > ${CHROOT}/usr/sbin/policy-rc.d < < EOF
+cat > ${CHROOT}/usr/sbin/policy-rc.d << EOF
 #!/bin/sh
 echo "All runlevel operations denied by policy" >&2
 exit 101
