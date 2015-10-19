@@ -7,14 +7,14 @@ CHROOT="/opt/db_raspbian"
 # use mirrorbrain be nice to raspbian project...
 MIRROR=http://mirrordirector.raspbian.org/raspbian
 #MIRROR=http://archive.raspbian.org/raspbian
-XBINS="true false ls sort cp make chmod chown grep gunzip unzip gzip mkdir mktemp rm sed seq"
+XBINS="true false ls sort cp make chmod chown grep gunzip gzip mkdir mktemp rm sed seq"
 XBINS+=" debootstrap tar m4 test uniq xargs xz fold md5sum bash"
 # binaries which arm binaries in chrooted environment
 QEMU_BINARIES="qemu-arm qemu-arm-binfmt qemu-arm-static"
 # which packages you would like to have in chroot environment by default
 ADDITIONAL_PACKAGES="coreutils joe less openssh-client openssh-server gcc libc6-dev git"
 ADDITIONAL_PACKAGES+=" libsqlite3-dev autoconf automake devscripts gawk g++ git-core"
-ADDITIONAL_PACKAGES+=" libncurses5-dev libtool make python-dev gawk pkg-config"
+ADDITIONAL_PACKAGES+=" libjpeg62-dev libncurses5-dev libtool make python-dev gawk pkg-config"
 ADDITIONAL_PACKAGES+=" libperl-dev libgdbm-dev libdb-dev gettext sudo libsqlite3-dev"
 
 function do_log {
@@ -26,11 +26,11 @@ function ch_exec () {
 }
 
 function get_lib () {
-	echo $(ldconfig -p | sed -re '/'$1'/!d;s/.*=> //g')
+	echo $(ldconfig -p|grep $1|grep '>'|cut -d '>' -f 2)
 }
 
 function get_ldd_lib () {
-	echo $(ldd $1 | sed -re '/=>/!d;s/.*=> (.*) \(.*/\1/g')
+	echo $(ldd $1 |grep '> /'|cut -d ' ' -f 3)
 }
 
 
@@ -93,20 +93,21 @@ EOF
 chmod +x ${CHROOT}/usr/sbin/policy-rc.d
 
 set -x
-debootstrap --no-check-gpg --arch=armhf --verbose jessie ${CHROOT} ${MIRROR}
+debootstrap --no-check-gpg --arch=armhf --verbose wheezy ${CHROOT} ${MIRROR}
 set +x
 # Get public key...
 wget http://archive.raspbian.org/raspbian.public.key -O ${CHROOT}/tmp/raspbian.public.key
 
 ch_exec 'apt-key add /tmp/raspbian.public.key'
 ch_exec 'apt-get update'
-ch_exec "apt-get -y --force-yes install m4 make wget unzip ${ADDITIONAL_PACKAGES}"
+ch_exec "apt-get -y --force-yes install m4 make wget ${ADDITIONAL_PACKAGES}"
 
 xarch=$(uname -m)
 carch=$(ch_exec 'uname -m')
 
 # add ld-linux loader to all libs first
-ALL_LIBS=$(ldconfig -p|sed -re '/(ld-|libnss_|libnsl|libz[^y])/!d;s/.*=> //g')
+ALL_LIBS=$(ldconfig -p|egrep '(libnss_|ld-|libnsl|libz)'|cut -d '>' -f 2)
+
 # Prepare cross compiler to be able to run it from chroot in "real" arm env
 ###########(cd ${CHROOT} ; git clone https://github.com/raspberrypi/tools.git) ### way to slow....
 if [ -f /opt/master.zip ]; then
@@ -157,7 +158,7 @@ for libname in $(echo $ALL_LIBS|sort|uniq) ; do
 done
 # now fix ld-linux to search into /lab /lab64 and other "labs" err libs hehe
 mkdir -p ${CHROOT}/lib64
-for libname in $(/sbin/ldconfig -p|sed -re '/\/ld-/!d;s/.*=> //g') ; do
+for libname in $(ldconfig -p|grep /ld-|cut -d '>' -f 2|sort|uniq) ; do
 	DNAME=${CHROOT}/$(dirname $libname)
 	mkdir -p ${DNAME}
 	cp  ${libname}* $DNAME
